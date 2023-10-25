@@ -21,8 +21,8 @@ impl DB{
     fn create_table(&self) {
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS times (
-                id              INTEGER PRIMARY KEY,
-                name            TEXT NOT NULL,
+                id              INTEGER,
+                name            TEXT PRIMARY KEY NOT NULL,
                 location        TEXT NOT NULL
             )",
             (),
@@ -30,19 +30,37 @@ impl DB{
     }
 
     fn set(&self, name: &String, location: &String){
-        self.conn.execute(
-            "INSERT INTO times (name, location) VALUES (?1, ?2)",
-            [name, location],
-        ).unwrap();
+        let mut stmt = self.conn.prepare("SELECT COUNT(*) FROM times WHERE name = ?").unwrap();
+        let count: i64 = stmt.query_row(params![name], |row| row.get(0)).unwrap();
+
+        if count == 0 {
+            self.conn.execute(
+                "INSERT INTO times (name, location) VALUES (?1, ?2)",
+                params![name, location],
+            ).unwrap();
+        } else {
+            self.conn.execute(
+                "UPDATE times SET location = ?1 WHERE name = ?2",
+                params![location, name],
+            ).unwrap();
+        }
     }
 
 
     fn get(&self, name: &str) -> String{
         let mut stmt = self.conn.prepare("SELECT location FROM times WHERE name = ?1").unwrap();
         let mut rows = stmt.query(params![name]).unwrap();
-        let row = rows.next().unwrap().expect("DB: get operation failed");
-        let location: String = row.get(0).unwrap();
-        return location
+        
+        match rows.next().unwrap(){
+            Some(row) => {
+                let location: String = row.get(0).unwrap();
+                location
+            },
+            None => {
+                eprintln!("Err: No such name found!");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
@@ -69,13 +87,13 @@ fn format_time(zone: &String) -> String {
 
     let message;
     if hour >= 5 && hour <= 12{
-        message = format!("{} {}", formatted_time, "☀️");
+        message = format!("{} {}", formatted_time, "☀️ ");
     } else if hour >= 12 && hour <= 17 {
-        message = format!("{} {}", formatted_time, "🌇");
+        message = format!("{} {}", formatted_time, "🌇 ");
     } else if hour >= 17 && hour <= 21 {
-        message = format!("{} {}", formatted_time, "🌃");
+        message = format!("{} {}", formatted_time, "🌃 ");
     } else {
-        message = format!("{} {}", formatted_time, "🌙");
+        message = format!("{} {}", formatted_time, "🌙 ");
     }
     message
 }
